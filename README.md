@@ -1,8 +1,8 @@
-# Kisera Cottage / Kisera 小屋开源版
+# KI-CO / Kisera Cottage
 
-`kis-cottage` is a lightweight open-source AI companion app scaffold. It can run as a complete cottage experience, or be integrated module by module into another frontend.
+一间开源的 AI 陪伴小屋，提供前端骨架、记忆系统与交互房间，给每一个想自己定义人机关系的人。
 
-`kis-cottage` 是一个轻量的开源 AI companion 小屋骨架。它既可以作为完整的小屋直接运行，也可以把观影室、长对话、人设页、记忆库等模块拆出来接入已有前端。
+An open-source AI companion cottage: a frontend scaffold with chat, persona, memory, settings, and cinema-room modules for people who want to build AI companion spaces on their own terms.
 
 ## Included / 包含内容
 
@@ -61,6 +61,7 @@ Before publishing your own fork, check:
 
 ## Project Name / 项目名称
 
+- repository name: `KI-CO`
 - package name: `kis-cottage`
 - display name: `Kisera Cottage`
 - Chinese display name: `Kisera 小屋开源版`
@@ -68,4 +69,4 @@ Before publishing your own fork, check:
 
 ## License
 
-MIT.
+CC BY-NC-SA 4.0. See `LICENSE`.
