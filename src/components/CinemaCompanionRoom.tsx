@@ -319,10 +319,10 @@ function makeCoveragePlanPoint(cue: SubtitleCue, index: number, density: Compani
     time: cue.start,
     subtitle: cue.text,
     companionHint: density === "breakdown"
-      ? "这里可以拆一下节奏和调度。"
+      ? "这里..."
       : cue.text.length > 42
-        ? "这里值得轻轻停一下。"
-        : "这一刻可以轻轻接一下。",
+        ? "这里想说点..."
+        : "想说点...",
     type: density === "breakdown" ? "observe" : "emotion",
     priority: "medium",
     delivery: "hint",
@@ -1994,7 +1994,7 @@ export function CinemaCompanionRoom({
                       void askAboutCompanionPoint(activeCompanionPoint);
                     }}
                   >
-                    {activeCompanionDelivery === "hint" ? "有一句想轻轻告诉你" : activeCompanionPoint.companionHint}
+                    {activeCompanionDelivery === "hint" ? "想说点..." : activeCompanionPoint.companionHint}
                   </button>
                   {activeCompanionDelivery === "hint" && (
                     <button type="button" className="plan-bubble-listen" onClick={() => setActiveCompanionDelivery("auto")}>听听</button>
