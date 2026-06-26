@@ -1646,7 +1646,7 @@ ${currentStateCard.content.trim()}`
             <div className="cottage-empty-chat">
               <Database size={30} />
               <strong>这里会保存长对话，也会承接每部片子的观影对话。</strong>
-              <span>下一步接入轻量人格核和记忆库后，它会更像小屋里的连续窗口。</span>
+              <span>人格核、记忆库、状态卡和时光回廊已经接入；这里会保留每一扇窗口。</span>
             </div>
           )}
 
