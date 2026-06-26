@@ -367,7 +367,7 @@ export function MemoryBankPage({ settings }: MemoryBankPageProps) {
               </span>
               <div className="settings-section-copy">
                 <strong>写入记忆</strong>
-                <small>记录稳定偏好、长期项目、关系背景、重要设定和需要反复记住的事。</small>
+                <small>记录稳定偏好、核心事件、关系背景、成长日志和需要反复记住的事。</small>
               </div>
             </div>
             <div className="settings-section-body memory-compose">
@@ -382,7 +382,7 @@ export function MemoryBankPage({ settings }: MemoryBankPageProps) {
                 <input
                   value={newMemoryTags}
                   onChange={(event) => setNewMemoryTags(event.target.value)}
-                  placeholder="分类标签，留空则归为通用"
+                  placeholder="分类标签"
                 />
                 <button type="button" className="primary-memory-button" onClick={handleAdd} disabled={!newMemoryContent.trim()}>
                   <Plus size={15} />
