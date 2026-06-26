@@ -10,6 +10,9 @@ export interface PromptCacheTurnStat {
   cachedTokens: number;
   outputTokens: number;
   savingsRatio: number;
+  cacheStrategy?: string;
+  cacheablePrefixTokens?: number;
+  cacheablePrefixMinTokens?: number;
 }
 
 export interface PromptCacheStatsSnapshot {
@@ -50,10 +53,16 @@ export function parseUsageForPromptCache(
 ): { inputTokens: number; cachedTokens: number; outputTokens: number } | null {
   if (!usage || typeof usage !== "object") return null;
 
+  const anthropicInputTokens =
+    firstFiniteNumber(usage.input_tokens) +
+    firstFiniteNumber(usage.cache_creation_input_tokens, usage.cache_creation_tokens) +
+    firstFiniteNumber(usage.cache_read_input_tokens, usage.cache_read_tokens);
+
   const inputTokens = Math.max(
     0,
     Math.round(
       firstFiniteNumber(
+        anthropicInputTokens > 0 ? anthropicInputTokens : undefined,
         usage.prompt_tokens,
         usage.input_tokens,
         usage.promptTokenCount,
@@ -125,6 +134,13 @@ function readHistory(): PromptCacheTurnStat[] {
         cachedTokens: Math.max(0, Math.round(Number(item?.cachedTokens) || 0)),
         outputTokens: Math.max(0, Math.round(Number(item?.outputTokens) || 0)),
         savingsRatio: Math.max(0, Math.min(1, Number(item?.savingsRatio) || 0)),
+        cacheStrategy: typeof item?.cacheStrategy === "string" ? item.cacheStrategy : undefined,
+        cacheablePrefixTokens: Number.isFinite(Number(item?.cacheablePrefixTokens))
+          ? Math.max(0, Math.round(Number(item.cacheablePrefixTokens)))
+          : undefined,
+        cacheablePrefixMinTokens: Number.isFinite(Number(item?.cacheablePrefixMinTokens))
+          ? Math.max(0, Math.round(Number(item.cacheablePrefixMinTokens)))
+          : undefined,
       }))
       .filter((item) => item.inputTokens > 0)
       .slice(-HISTORY_LIMIT);
@@ -157,7 +173,12 @@ export function subscribePromptCacheStats(listener: () => void): () => void {
   return () => window.removeEventListener(UPDATE_EVENT, listener);
 }
 
-export function recordPromptCacheTurn(provider: PromptCacheProvider, model: string, usage: any): PromptCacheTurnStat | null {
+export function recordPromptCacheTurn(
+  provider: PromptCacheProvider,
+  model: string,
+  usage: any,
+  meta?: Pick<PromptCacheTurnStat, "cacheStrategy" | "cacheablePrefixTokens" | "cacheablePrefixMinTokens">,
+): PromptCacheTurnStat | null {
   const parsed = parseUsageForPromptCache(usage);
   if (!parsed) return null;
 
@@ -169,6 +190,7 @@ export function recordPromptCacheTurn(provider: PromptCacheProvider, model: stri
     cachedTokens: parsed.cachedTokens,
     outputTokens: parsed.outputTokens,
     savingsRatio: parsed.inputTokens > 0 ? parsed.cachedTokens / parsed.inputTokens : 0,
+    ...meta,
   };
   const history = [...readHistory(), stat].slice(-HISTORY_LIMIT);
   writeHistory(history);
@@ -200,4 +222,3 @@ export function clearPromptCacheStats() {
   writeHistory([]);
   notifyPromptCacheUpdated();
 }
-

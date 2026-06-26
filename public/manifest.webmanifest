@@ -1,0 +1,28 @@
+{
+  "name": "KI-CO Cottage",
+  "short_name": "KI-CO",
+  "id": "/",
+  "description": "A local-first companion cottage for chat, persona core, memory notes, cinema room, and diary continuity.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#15110e",
+  "theme_color": "#dcbda8",
+  "lang": "zh-CN",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png?v=logo2",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icon-512.png?v=logo2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -6,8 +6,14 @@
   "private": false,
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:pwa": "set VITE_PWA_DEV=true&& vite --host 0.0.0.0",
+    "dev:pwa:https": "set VITE_PWA_DEV=true&& set VITE_HTTPS=true&& vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "preview:pwa": "npm run build && vite preview --host 0.0.0.0",
+    "preview:pwa:https": "set VITE_HTTPS=true&& npm run build && vite preview --host 0.0.0.0",
+    "obsidian:bridge": "node scripts/obsidian-bridge.mjs",
+    "obsidian:bridge:lan": "set OBSIDIAN_BRIDGE_HOST=0.0.0.0&& node scripts/obsidian-bridge.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

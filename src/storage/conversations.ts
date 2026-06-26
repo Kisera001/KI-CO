@@ -18,6 +18,7 @@ export interface ConversationImportReport {
   merged: number;
   copied: number;
   reusedIdentical: number;
+  idMap: Record<string, string>;
 }
 
 function now() {
@@ -67,7 +68,7 @@ function mergeConversationMessages(current: ConversationMessage[], incoming: Con
 }
 
 export function listConversations(): ConversationRecord[] {
-  return readConversations().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return readConversations().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function exportConversationRecords(): ConversationRecord[] {
@@ -112,6 +113,7 @@ export function importConversationRecords(
     merged: 0,
     copied: 0,
     reusedIdentical: 0,
+    idMap: {},
   };
 
   incoming.forEach((conversation) => {
@@ -121,14 +123,17 @@ export function importConversationRecords(
       const existing = next[sameIdIndex];
       if (conversationFingerprint(existing) === fingerprint) {
         report.reusedIdentical += 1;
+        report.idMap[conversation.id] = existing.id;
         return;
       }
       if (conflictMode === "copy") {
-        next.unshift({
+        const copy = {
           ...conversation,
           id: createId("import"),
           title: `${conversation.title} (导入副本)`,
-        });
+        };
+        next.unshift(copy);
+        report.idMap[conversation.id] = copy.id;
         report.copied += 1;
         return;
       }
@@ -141,16 +146,19 @@ export function importConversationRecords(
         messages: mergeConversationMessages(existing.messages, conversation.messages),
       };
       report.merged += 1;
+      report.idMap[conversation.id] = existing.id;
       return;
     }
 
     const equivalent = next.find((item) => conversationFingerprint(item) === fingerprint);
     if (equivalent) {
       report.reusedIdentical += 1;
+      report.idMap[conversation.id] = equivalent.id;
       return;
     }
 
     next.unshift(conversation);
+    report.idMap[conversation.id] = conversation.id;
     report.added += 1;
   });
 

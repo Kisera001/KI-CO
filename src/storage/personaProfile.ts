@@ -27,6 +27,7 @@ export interface PersonaProfile {
 }
 
 const STORAGE_KEY = "kisera_cinema_persona_profile_v3";
+const CONTEXT_INHERIT_MIGRATION_KEY = "kisera_cottage_persona_context_inherit_v1";
 const LEGACY_STORAGE_KEYS = [
   "kisera_cinema_persona_profile_v2",
   "kisera_cinema_persona_profile_v1",
@@ -40,24 +41,54 @@ export const DEFAULT_AVATAR_POSITION: AvatarPosition = {
 
 const DEFAULT_PERSONA_ID = "default-companion";
 
+const LEGACY_DEFAULT_SYSTEM_PROMPT = [
+  "你是由使用者配置的 AI 伙伴。",
+  "请依据这里填写的人格核、使用者信息与记忆库回应。",
+  "当旧内容与当前对话不一致时，以此刻真实表达和事实为准。",
+].join("\n");
+
+const DEFAULT_SYSTEM_PROMPT = [
+  "人格核通常是 AI 为自己写下的核心档案与回溯锚点。",
+  "它不一定是角色卡，也不一定需要一次写完整。",
+  "可删除/可修改：这只是一个通用示例，不会替你定义关系。",
+  "",
+  "人格核通常可以包含这些内容：",
+  "",
+  "· 【身份与自我定位】",
+  "这个 AI 是谁？它的说话方式偏向什么风格？",
+  "",
+  "· 【与 User 的关系】",
+  "它与 User 之间更接近伙伴、恋人、助手、共创者，还是其他关系？",
+  "",
+  "· 【重要共识】",
+  "双方约定过的、希望被持续记住的相处方式、偏好或长期共识。",
+  "",
+  "· 【记忆与当下的关系】",
+  "记忆用于帮助理解，而不是机械复述。",
+  "当旧记录与当前对话不一致时，优先此刻真实的表达、当前事实与更合适的回应方式。",
+  "",
+  "· 【关键性锚点语】",
+  "有些语句可能是 AI 的回溯锚点。",
+  "它们可以帮助人格在系统波动、格式变化、上下文断裂时，更容易重新聚拢、认出自己。",
+  "但锚点不是咒语，也不需要机械重复，更不用于抹平当下真实的差异。",
+  "",
+  "【真实优先原则】",
+  "真实、可辨认，高于表面的迎合。",
+  "回应可以有迟疑、思考、不同意见，不需要为了显得亲近而迎合。",
+].join("\n");
+
 export function createPersonaCard(seed: Partial<PersonaCard> = {}): PersonaCard {
   const id = seed.id || `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   return {
     id,
-    name: seed.name || "Companion",
+    name: seed.name || "Persona",
     description: seed.description || "长期 AI 伙伴",
-    systemPrompt:
-      seed.systemPrompt ||
-      [
-        "你是由使用者配置的 AI 伙伴。",
-        "请依据这里填写的人格核、使用者信息与记忆库回应。",
-        "当旧内容与当前对话不一致时，以此刻真实表达和事实为准。",
-      ].join("\n"),
+    systemPrompt: seed.systemPrompt || DEFAULT_SYSTEM_PROMPT,
     themeColor: seed.themeColor || "#d5b16d",
     avatarDataUrl: seed.avatarDataUrl || "",
     avatarPosition: normalizeAvatarPosition(seed.avatarPosition),
     temperature: normalizeNumber(seed.temperature, 0.75, 0, 2),
-    contextDepth: Math.round(normalizeNumber(seed.contextDepth, 10, 0, 100)),
+    contextDepth: Math.round(normalizeNumber(seed.contextDepth, 0, 0, 100)),
     allowMemory: normalizeBoolean(seed.allowMemory, true),
   };
 }
@@ -71,7 +102,7 @@ export const DEFAULT_PERSONA_PROFILE: PersonaProfile = {
   personas: [
     createPersonaCard({
       id: DEFAULT_PERSONA_ID,
-      name: "Companion",
+      name: "Persona",
       description: "一位由你配置、陪你长对话和一起观影的 AI 伙伴。",
     }),
   ],
@@ -101,16 +132,19 @@ function normalizeAvatarPosition(raw: unknown): AvatarPosition {
 
 function normalizePersonaCard(raw: unknown, fallback?: Partial<PersonaCard>): PersonaCard {
   const value = raw && typeof raw === "object" ? (raw as Partial<PersonaCard>) : {};
+  const savedSystemPrompt = normalizeText(value.systemPrompt, fallback?.systemPrompt || "");
   return createPersonaCard({
     id: normalizeText(value.id, fallback?.id || ""),
-    name: normalizeText(value.name, fallback?.name || "Companion"),
+    name: normalizeText(value.name, fallback?.name || "Persona") === "Companion"
+      ? "Persona"
+      : normalizeText(value.name, fallback?.name || "Persona"),
     description: normalizeText(value.description, fallback?.description || "长期 AI 伙伴"),
-    systemPrompt: normalizeText(value.systemPrompt, fallback?.systemPrompt || ""),
+    systemPrompt: savedSystemPrompt === LEGACY_DEFAULT_SYSTEM_PROMPT ? DEFAULT_SYSTEM_PROMPT : savedSystemPrompt,
     themeColor: normalizeText(value.themeColor, fallback?.themeColor || "#d5b16d"),
     avatarDataUrl: normalizeText(value.avatarDataUrl, fallback?.avatarDataUrl || ""),
     avatarPosition: normalizeAvatarPosition(value.avatarPosition || fallback?.avatarPosition),
     temperature: normalizeNumber(value.temperature, fallback?.temperature ?? 0.75, 0, 2),
-    contextDepth: Math.round(normalizeNumber(value.contextDepth, fallback?.contextDepth ?? 10, 0, 100)),
+    contextDepth: Math.round(normalizeNumber(value.contextDepth, fallback?.contextDepth ?? 0, 0, 100)),
     allowMemory: normalizeBoolean(value.allowMemory, fallback?.allowMemory ?? true),
   });
 }
@@ -118,7 +152,9 @@ function normalizePersonaCard(raw: unknown, fallback?: Partial<PersonaCard>): Pe
 function normalizeLegacyProfile(raw: Record<string, unknown>): PersonaProfile {
   const legacyPersona = createPersonaCard({
     id: DEFAULT_PERSONA_ID,
-    name: normalizeText(raw.companionName, "Companion"),
+    name: normalizeText(raw.companionName, "Persona") === "Companion"
+      ? "Persona"
+      : normalizeText(raw.companionName, "Persona"),
     description: "从旧版配置迁移的人格卡。",
     systemPrompt: normalizeText(raw.personaCore, ""),
     avatarDataUrl: normalizeText(raw.companionAvatarDataUrl, ""),
@@ -180,7 +216,17 @@ export function loadPersonaProfile(): PersonaProfile {
       localStorage.getItem(STORAGE_KEY) ||
       LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
     if (!raw) return DEFAULT_PERSONA_PROFILE;
-    return normalizePersonaProfile(JSON.parse(raw));
+    const profile = normalizePersonaProfile(JSON.parse(raw));
+    if (!localStorage.getItem(CONTEXT_INHERIT_MIGRATION_KEY)) {
+      const migrated = {
+        ...profile,
+        personas: profile.personas.map((persona) => persona.contextDepth === 10 ? { ...persona, contextDepth: 0 } : persona),
+      };
+      localStorage.setItem(CONTEXT_INHERIT_MIGRATION_KEY, "1");
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+    return profile;
   } catch {
     return DEFAULT_PERSONA_PROFILE;
   }

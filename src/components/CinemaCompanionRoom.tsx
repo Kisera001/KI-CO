@@ -1,9 +1,8 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera,
   Clapperboard,
   Clock3,
-  Database,
   ExternalLink,
   Film,
   Heart,
@@ -23,10 +22,12 @@ import {
   UserRoundCog,
   X,
 } from "lucide-react";
+import { ChronicleBookGlyph, CottageLogoMark, MemoryArchiveGlyph } from "./CottageGlyphs";
 import type { CompanionAdapters, CompanionPlanPoint, ConversationAttachment, SubtitleCue, UplinkSettings, WatchRecord } from "../types";
 import { captureVideoFrame, captureVideoThumbnail } from "../utils/media";
 import { getSubtitleWindow, parseSubtitles } from "../utils/subtitles";
 import { selectCacheFriendlyWindow } from "../utils/contextWindow";
+import { shouldRetrieveMemory } from "../utils/memoryRecallGate";
 import { formatTime, slugifyTitle } from "../utils/time";
 import { listWatchRecords, removeWatchRecord, renameWatchRecord, saveWatchRecord } from "../storage/watchRecords";
 import { appendConversationMessages, findWatchConversation, getOrCreateWatchConversation, renameWatchConversationLink } from "../storage/conversations";
@@ -38,6 +39,7 @@ interface CinemaCompanionRoomProps {
   onOpenLongChat?: () => void;
   onOpenPersona?: () => void;
   onOpenMemory?: () => void;
+  onOpenChronicle?: () => void;
   onOpenVectorLab?: () => void;
   onOpenSettings?: () => void;
   onOpenConversation?: (conversationId: string) => void;
@@ -157,22 +159,19 @@ function KiseraStarIcon({ size = 18, className }: { size?: number; className?: s
       className={className}
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="0 0 14 14"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <circle cx="12" cy="12" r="8.15" stroke="currentColor" strokeWidth="1.15" opacity="0.42" />
+      <ellipse cx="7" cy="7" rx="6.2" ry="2" stroke="currentColor" strokeWidth="0.6" fill="none" transform="rotate(-30 7 7)" opacity="0.8" />
+      <circle cx="9.8" cy="4.2" r="0.6" fill="#fff" />
+      <line x1="2.5" y1="7" x2="11.5" y2="7" stroke="currentColor" strokeWidth="0.5" opacity="0.4" />
+      <line x1="7" y1="1.5" x2="7" y2="12.5" stroke="currentColor" strokeWidth="0.5" opacity="0.4" />
       <path
-        d="M12 2.8 13.55 9 20.1 12 13.55 15 12 21.2 10.45 15 3.9 12 10.45 9 12 2.8Z"
-        stroke="currentColor"
-        strokeWidth="1.45"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 7.2 12.78 10.45 16.1 12 12.78 13.55 12 16.8 11.22 13.55 7.9 12 11.22 10.45 12 7.2Z"
+        d="M7 1.2C7 4.2 8.8 6 10.8 7C8.8 8 7 9.8 7 12.8C7 9.8 5.2 8 3.2 7C5.2 6 7 4.2 7 1.2Z"
         fill="currentColor"
-        opacity="0.78"
       />
+      <circle cx="7" cy="7" r="0.8" fill="#fff" />
     </svg>
   );
 }
@@ -598,6 +597,7 @@ export function CinemaCompanionRoom({
   onOpenLongChat,
   onOpenPersona,
   onOpenMemory,
+  onOpenChronicle,
   onOpenVectorLab,
   onOpenSettings,
   onOpenConversation,
@@ -695,6 +695,9 @@ export function CinemaCompanionRoom({
   );
   const hasWatchSource = !!videoUrl || !!webFrameSource;
   const hasCustomBackground = !!uplinkSettings.visual.customBackgroundDataUrl;
+  const backgroundFitMode = uplinkSettings.visual.backgroundFit;
+  const backgroundFitClass = `fit-${backgroundFitMode}`;
+  const fittedLightMap = backgroundFitMode !== "cover";
   const activeAudioTrack =
     audioTrackOptions.find((track) => track.enabled)
     ?? (selectedAudioTrackIndex !== null
@@ -1555,13 +1558,15 @@ export function CinemaCompanionRoom({
     setMessages((items) => [...items, { id: `user-${id}`, role: "user", text: displayText }]);
     setUserMessage("");
     try {
+      const memoryQuery = options.retrievalQuery ?? `${title}\n${subtitleWindow.active?.text ?? ""}\n${displayText}`;
+      const shouldRecallMemory = shouldRetrieveMemory(displayText, { force: Boolean(options.retrievalQuery) });
+
       const [personaCore, userContext, memories] = await Promise.all([
         adapters.persona.getPersonaCore(),
         adapters.persona.getUserContext?.() ?? Promise.resolve(""),
-        adapters.memory.retrieveRelevant(
-          options.retrievalQuery ?? `${title}\n${subtitleWindow.active?.text ?? ""}\n${displayText}`,
-          uplinkSettings.contextLoad.memorySnippetLimit,
-        ),
+        shouldRecallMemory
+          ? adapters.memory.retrieveRelevant(memoryQuery, uplinkSettings.contextLoad.memorySnippetLimit)
+          : Promise.resolve([]),
       ]);
 
       const recentMessages = selectCacheFriendlyWindow(messages, uplinkSettings.contextLoad.shortTermMessageLimit)
@@ -1761,15 +1766,32 @@ export function CinemaCompanionRoom({
       data-font={uplinkSettings.visual.fontStyle}
       data-font-size={uplinkSettings.visual.fontSize}
     >
-      <div className="room-background" aria-hidden="true">
+      <div className={`room-background ${backgroundFitClass}`} aria-hidden="true">
         {hasCustomBackground ? (
-          <img
-            src={uplinkSettings.visual.customBackgroundDataUrl}
-            alt=""
-            className={uplinkSettings.visual.backgroundFit === "contain" ? "contain" : ""}
-          />
+          <>
+            <img
+              src={uplinkSettings.visual.customBackgroundDataUrl}
+              alt=""
+              className="room-background-fill"
+            />
+            <img
+              src={uplinkSettings.visual.customBackgroundDataUrl}
+              alt=""
+              className="room-background-main"
+            />
+          </>
         ) : (
           <>
+            <img
+              src={getDefaultCinemaBackgroundSrc("cinema-room-bg", defaultBackgroundExtensionIndex)}
+              alt=""
+              className={`room-background-fill room-background-layer ${lightsOff ? "is-hidden" : "is-visible"}`}
+            />
+            <img
+              src={getDefaultCinemaBackgroundSrc("cinema-room-bg2", defaultDarkBackgroundExtensionIndex)}
+              alt=""
+              className={`room-background-fill room-background-layer ${lightsOff ? "is-visible" : "is-hidden"}`}
+            />
             <img
               src={getDefaultCinemaBackgroundSrc("cinema-room-bg", defaultBackgroundExtensionIndex)}
               alt=""
@@ -1778,7 +1800,7 @@ export function CinemaCompanionRoom({
                   Math.min(index + 1, DEFAULT_BACKGROUND_EXTENSIONS.length - 1),
                 );
               }}
-              className={`room-background-layer ${uplinkSettings.visual.backgroundFit === "contain" ? "contain" : ""} ${
+              className={`room-background-main room-background-layer ${
                 lightsOff ? "is-hidden" : "is-visible"
               }`}
             />
@@ -1790,7 +1812,7 @@ export function CinemaCompanionRoom({
                   Math.min(index + 1, DEFAULT_BACKGROUND_EXTENSIONS.length - 1),
                 );
               }}
-              className={`room-background-layer ${uplinkSettings.visual.backgroundFit === "contain" ? "contain" : ""} ${
+              className={`room-background-main room-background-layer ${
                 lightsOff ? "is-visible" : "is-hidden"
               }`}
             />
@@ -1802,7 +1824,7 @@ export function CinemaCompanionRoom({
       )}
       {!hasCustomBackground && (
         <div
-          className={`cinema-light-map ${uplinkSettings.visual.backgroundFit === "contain" ? "contain" : ""}`}
+          className={`cinema-light-map ${fittedLightMap ? "contain" : ""}`}
         >
           <button
             type="button"
@@ -1852,8 +1874,8 @@ export function CinemaCompanionRoom({
       />
 
       <section className="cinema-header">
-        <KiseraStarIcon size={17} />
-        <h1>Kisera Cottage · 小屋开源版 · 观影室</h1>
+        <CottageLogoMark className="cinema-header-logo" />
+        <h1>KI-CO</h1>
       </section>
 
       <div className="room-side-entry" aria-label="房间入口">
@@ -1866,8 +1888,12 @@ export function CinemaCompanionRoom({
           <span>人格核</span>
         </button>
         <button type="button" onClick={onOpenMemory} title="记忆库">
-          <Database size={18} />
+          <MemoryArchiveGlyph size={18} />
           <span>记忆库</span>
+        </button>
+        <button type="button" onClick={onOpenChronicle} title="时光回廊">
+          <ChronicleBookGlyph size={18} />
+          <span>回廊</span>
         </button>
         <button type="button" onClick={onOpenVectorLab} title="向量调音台">
           <SlidersHorizontal size={18} />

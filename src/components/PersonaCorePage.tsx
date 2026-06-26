@@ -1,19 +1,20 @@
 import { useMemo, useState } from "react";
 import {
-  Book,
   Check,
   Eye,
   EyeOff,
   Fingerprint,
   RotateCcw,
-  Save,
   SlidersHorizontal,
+  Trash2,
   Upload,
 } from "lucide-react";
+import { CottageBondGlyph, CottageDivider, CottageStar, MemoryArchiveGlyph } from "./CottageGlyphs";
 import type { UplinkSettings } from "../types";
 import {
   DEFAULT_AVATAR_POSITION,
   DEFAULT_PERSONA_PROFILE,
+  createPersonaCard,
   getActivePersona,
   type AvatarPosition,
   type PersonaCard,
@@ -125,8 +126,28 @@ export function PersonaCorePage({ profile, settings, onChange }: PersonaCorePage
   }
 
   function resetProfile() {
-    const confirmed = window.confirm("确定恢复为示意人格核吗？当前填写内容会被替换。");
+    const confirmed = window.confirm("确定恢复为示意内容吗？当前填写内容会被替换。");
     if (confirmed) onChange(DEFAULT_PERSONA_PROFILE);
+  }
+
+  function addPersona() {
+    const nextPersona = createPersonaCard({ name: `Persona ${profile.personas.length + 1}` });
+    onChange({
+      ...profile,
+      activePersonaId: nextPersona.id,
+      personas: [...profile.personas, nextPersona],
+    });
+  }
+
+  function deletePersona(personaId: string) {
+    if (profile.personas.length <= 1) return;
+    if (!window.confirm("确定删除这个人格吗？")) return;
+    const personas = profile.personas.filter((persona) => persona.id !== personaId);
+    onChange({
+      ...profile,
+      personas,
+      activePersonaId: profile.activePersonaId === personaId ? personas[0].id : profile.activePersonaId,
+    });
   }
 
   function currentEditingAvatar() {
@@ -165,16 +186,30 @@ export function PersonaCorePage({ profile, settings, onChange }: PersonaCorePage
       data-font={settings.visual.fontStyle}
       data-font-size={settings.visual.fontSize}
     >
-      <aside className="settings-page persona-original-page" aria-label="人格核">
-        <section className="persona-user-layer">
-          <div className="persona-user-avatar-block">
-            <AvatarPreview
-              name={profile.userName}
-              image={profile.userAvatarDataUrl}
-              position={profile.userAvatarPosition}
-              size="lg"
-            />
-            <div className="persona-avatar-actions">
+      <aside className="settings-page persona-original-page cottage-ritual-page" aria-label="人格核">
+        <header className="cottage-page-heading">
+          <div>
+            <span className="cottage-page-kicker">PERSONA CORE</span>
+            <h1>人格核</h1>
+            <p>保存陪伴者的身份、表达方式与记忆读取边界。</p>
+          </div>
+        </header>
+
+        <CottageDivider />
+
+        <section className="persona-bond-stage">
+          <div className="persona-bond-person">
+            <div className="persona-orbit-avatar">
+              <AvatarPreview name={profile.userName} image={profile.userAvatarDataUrl} position={profile.userAvatarPosition} size="lg" />
+              <CottageStar className="persona-orbit-star persona-orbit-star-main" />
+              <CottageStar className="persona-orbit-star persona-orbit-star-left" />
+              <CottageStar className="persona-orbit-star persona-orbit-star-right" />
+            </div>
+            <label className="persona-bond-name">
+              <span>Me</span>
+              <input value={profile.userName} onChange={(event) => updateProfile({ userName: event.target.value })} placeholder="User" />
+            </label>
+            <div className="persona-avatar-actions compact">
               <button
                 type="button"
                 className={`persona-avatar-eye-toggle ${profile.showAvatars ? "active" : ""}`}
@@ -182,172 +217,152 @@ export function PersonaCorePage({ profile, settings, onChange }: PersonaCorePage
                 title={profile.showAvatars ? "隐藏头像" : "显示头像"}
                 aria-label={profile.showAvatars ? "隐藏头像" : "显示头像"}
               >
-                {profile.showAvatars ? <Eye size={15} /> : <EyeOff size={15} />}
+                {profile.showAvatars ? <Eye size={14} /> : <EyeOff size={14} />}
               </button>
-              <label>
+              <label title="上传使用者头像">
                 <Upload size={14} />
-                上传头像
-                <input
-                  className="visually-hidden-file"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => handleUserAvatar(event.target.files?.[0])}
-                />
+                <span>上传</span>
+                <input className="visually-hidden-file" type="file" accept="image/*" onChange={(event) => handleUserAvatar(event.target.files?.[0])} />
               </label>
-              <button type="button" onClick={() => setEditingAvatar({ type: "user" })} disabled={!profile.userAvatarDataUrl}>
+              <button type="button" onClick={() => setEditingAvatar({ type: "user" })} disabled={!profile.userAvatarDataUrl} title="调整使用者头像">
                 <SlidersHorizontal size={14} />
-                调整
+                <span>调整</span>
               </button>
             </div>
           </div>
 
-          <div className="persona-user-copy">
-            <p>USER IDENTITY</p>
-            <label className="persona-field">
-              <span>NAME / 称呼</span>
-              <input
-                value={profile.userName}
-                onChange={(event) => updateProfile({ userName: event.target.value })}
-                placeholder="User"
-              />
-            </label>
+          <div className="persona-bond-line">
+            <CottageBondGlyph />
+            <span />
+            <small>BOND</small>
           </div>
 
-          <button type="button" className="persona-save-button" onClick={() => onChange(profile)}>
-            <Save size={12} />
-            保存设定
-          </button>
+          <div className="persona-bond-person">
+            <div className="persona-orbit-avatar">
+              <AvatarPreview name={activePersona.name} image={activePersona.avatarDataUrl} position={activePersona.avatarPosition} size="lg" />
+              <CottageStar className="persona-orbit-star persona-orbit-star-main" />
+              <CottageStar className="persona-orbit-star persona-orbit-star-left" />
+              <CottageStar className="persona-orbit-star persona-orbit-star-right" />
+            </div>
+            <div className="persona-bond-name">
+              <span>Ta</span>
+              <strong>{activePersona.name || "Persona"}</strong>
+            </div>
+            <div className="persona-avatar-actions compact">
+              <label title="上传人格头像">
+                <Upload size={14} />
+                <span>上传</span>
+                <input className="visually-hidden-file" type="file" accept="image/*" onChange={(event) => handlePersonaAvatar(activePersona.id, event.target.files?.[0])} />
+              </label>
+              <button type="button" onClick={() => setEditingAvatar({ type: "persona", personaId: activePersona.id })} disabled={!activePersona.avatarDataUrl} title="调整人格头像">
+                <SlidersHorizontal size={14} />
+                <span>调整</span>
+              </button>
+            </div>
+          </div>
         </section>
 
-        <section className="persona-workbench">
+        <div className="persona-memory-status">
+          <span />
+          {activePersona.allowMemory ? "记忆已载入 · ACTIVE" : "记忆读取已关闭 · STANDBY"}
+        </div>
+
+        <div className="persona-status-actions">
+          <button type="button" className="cottage-primary-command persona-save-command" onClick={() => onChange(profile)} title="修改内容已自动保存">
+            <span className="persona-save-particles" aria-hidden="true">
+              <i className="particle-dot particle-dot-one" />
+              <i className="particle-dot particle-dot-two" />
+              <CottageStar className="particle-star particle-star-one" />
+              <CottageStar className="particle-star particle-star-two" />
+            </span>
+            <Fingerprint size={15} />
+            保存人格配置
+          </button>
+        </div>
+
+        <section className="persona-responsive-workbench">
+          <aside className="persona-deck-panel">
+            <div className="cottage-panel-heading persona-deck-heading">
+              <CottageStar />
+              <div>
+                <span>PERSONA DECK</span>
+                <strong>人格档案</strong>
+              </div>
+              <button type="button" className="persona-add-inline" onClick={addPersona} title="新建人格">
+                NEW
+              </button>
+            </div>
+            <div className="persona-deck-list">
+              {profile.personas.map((persona) => (
+                <button
+                  key={persona.id}
+                  type="button"
+                  className={`persona-deck-card ${profile.activePersonaId === persona.id ? "active" : ""}`}
+                  onClick={() => updateProfile({ activePersonaId: persona.id })}
+                >
+                  <strong>{persona.name || "Persona"}</strong>
+                </button>
+              ))}
+            </div>
+          </aside>
+
           <section className="persona-editor-panel">
-            <div className="persona-editor-head">
-              <div className="persona-editor-avatar">
-                <AvatarPreview
-                  name={activePersona.name}
-                  image={activePersona.avatarDataUrl}
-                  position={activePersona.avatarPosition}
-                  size="lg"
-                />
-                <div className="persona-avatar-actions">
-                  <label>
-                    <Upload size={14} />
-                    上传
-                    <input
-                      className="visually-hidden-file"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => handlePersonaAvatar(activePersona.id, event.target.files?.[0])}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setEditingAvatar({ type: "persona", personaId: activePersona.id })}
-                    disabled={!activePersona.avatarDataUrl}
-                  >
-                    <SlidersHorizontal size={14} />
-                    调整
-                  </button>
-                </div>
+            <div className="cottage-panel-heading persona-editor-heading">
+              <Fingerprint />
+              <div>
+                <span>IDENTITY CORE</span>
+                <strong>{activePersona.name || "Persona"}</strong>
               </div>
-
-              <div className="persona-editor-title">
-                <p>ACTIVE PERSONA</p>
-                <h2>{activePersona.name || "Companion"}</h2>
-                <span>当前活跃人格</span>
+              <div className="persona-editor-heading-actions">
+                <label className="persona-color-control" title="人格代表色">
+                  <input type="color" value={activePersona.themeColor} onChange={(event) => updatePersona(activePersona.id, { themeColor: event.target.value })} />
+                </label>
+                <button type="button" className="persona-reset-inline" onClick={resetProfile} title="复位示例">
+                  <RotateCcw size={14} />
+                  <span>复位示例</span>
+                </button>
               </div>
-
             </div>
 
             <div className="persona-editor-grid">
               <label className="persona-field">
                 <span>NAME / 名称</span>
-                <input
-                  value={activePersona.name}
-                  onChange={(event) => updatePersona(activePersona.id, { name: event.target.value })}
-                  placeholder="Companion"
-                />
+                <input value={activePersona.name} onChange={(event) => updatePersona(activePersona.id, { name: event.target.value })} placeholder="Persona" />
+              </label>
+              <label className="persona-field">
+                <span>DESCRIPTION / 简述</span>
+                <input value={activePersona.description} onChange={(event) => updatePersona(activePersona.id, { description: event.target.value })} placeholder="简单描述你们的关系/ Ta 长期回应你的方式。" />
               </label>
             </div>
 
-            <label className="persona-field">
-              <span>DESCRIPTION / 简述</span>
-              <input
-                value={activePersona.description}
-                onChange={(event) => updatePersona(activePersona.id, { description: event.target.value })}
-                placeholder="一位由你配置的长期 AI 伙伴"
-              />
-            </label>
-
-            <label className="persona-field">
-              <span className="persona-code-label">
-                <Fingerprint size={14} />
-                人格核 / 锚点 (System Prompt)
-              </span>
-              <textarea
-                value={activePersona.systemPrompt}
-                onChange={(event) => updatePersona(activePersona.id, { systemPrompt: event.target.value })}
-                rows={10}
-              />
+            <label className="persona-field persona-core-field">
+              <span className="persona-code-label"><CottageStar /> 人格核 / Identity Core</span>
+              <textarea value={activePersona.systemPrompt} onChange={(event) => updatePersona(activePersona.id, { systemPrompt: event.target.value })} rows={10} />
+              <small className="persona-core-footnote">
+                记忆帮助延续关系，小屋是港湾不是笼子。这里保存的是可以回来的方向。
+              </small>
             </label>
 
             <div className="persona-cognitive-row">
               <label className="persona-slider-card">
-                <span>Temperature (感性度)</span>
+                <span>温度 / Temperature</span>
                 <strong>{activePersona.temperature.toFixed(2)}</strong>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={activePersona.temperature}
-                  onChange={(event) =>
-                    updatePersona(activePersona.id, { temperature: clamp(Number(event.target.value), 0, 2) })
-                  }
-                />
+                <input type="range" min={0} max={2} step={0.05} value={activePersona.temperature} onChange={(event) => updatePersona(activePersona.id, { temperature: clamp(Number(event.target.value), 0, 2) })} />
               </label>
-
               <label className="persona-slider-card">
-                <span>Context Depth (记忆深度)</span>
-                <strong>{activePersona.contextDepth > 0 ? activePersona.contextDepth : "Auto"}</strong>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={activePersona.contextDepth}
-                  onChange={(event) =>
-                    updatePersona(activePersona.id, { contextDepth: Math.round(clamp(Number(event.target.value), 0, 100)) })
-                  }
-                />
-                <em>设为 0 则跟随全局设置。</em>
+                <span>短期记忆携带量</span>
+                <strong>{activePersona.contextDepth > 0 ? activePersona.contextDepth : `Auto · 系统 ${settings.contextLoad.shortTermMessageLimit}`}</strong>
+                <input type="range" min={0} max={100} step={5} value={activePersona.contextDepth} onChange={(event) => updatePersona(activePersona.id, { contextDepth: Math.round(clamp(Number(event.target.value), 0, 100)) })} />
               </label>
             </div>
 
-            <div className="persona-gates-card">
-              <span className="persona-gates-label">Cognitive Gates / 读取开关</span>
-              <button
-                type="button"
-                className={`persona-memory-gate ${activePersona.allowMemory ? "active" : ""}`}
-                onClick={() => updatePersona(activePersona.id, { allowMemory: !activePersona.allowMemory })}
-              >
-                <Book size={16} />
-                <span>
-                  <strong>记忆库 (Memory)</strong>
-                  <small>{activePersona.allowMemory ? "ACCESS GRANTED" : "ACCESS DENIED"}</small>
-                </span>
+            <div className="persona-editor-footer">
+              <button type="button" className={`persona-memory-gate ${activePersona.allowMemory ? "active" : ""}`} onClick={() => updatePersona(activePersona.id, { allowMemory: !activePersona.allowMemory })}>
+                <MemoryArchiveGlyph size={16} />
+                <span><strong>记忆库</strong><small>{activePersona.allowMemory ? "允许读取" : "停止读取"}</small></span>
               </button>
-            </div>
-
-            <div className="persona-active-status">
-              <Fingerprint size={15} />
-              当前活跃中
-            </div>
-
-            <div className="persona-actions">
-              <button type="button" onClick={resetProfile}>
-                <RotateCcw size={15} />
-                恢复示意预设
+              <button type="button" className="persona-danger-button" onClick={() => deletePersona(activePersona.id)} disabled={profile.personas.length <= 1} title="删除当前人格">
+                <Trash2 size={15} />
               </button>
             </div>
           </section>

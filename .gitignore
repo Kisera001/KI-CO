@@ -5,6 +5,8 @@ dist
 .env.*
 *.local
 *.log
+*.diff
 *.tsbuildinfo
 coverage
 docs/XIAOWU_*CHECKLIST.md
+icon-preview.html

@@ -11,7 +11,7 @@ import type {
   SubtitleCue,
   UplinkSettings,
 } from "../types";
-import { getActiveProfile } from "../settings/uplinkSettings";
+import { getActiveProfile, getJournalProfile } from "../settings/uplinkSettings";
 import { retrieveMemorySnippets } from "../storage/memoryBank";
 import {
   parseUsageForPromptCache,
@@ -59,6 +59,9 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil((text || "").length / 3));
 }
 
+const CLAUDE_CACHE_CONTROL = { type: "ephemeral" } as const;
+const CLAUDE_DEFAULT_MIN_CACHE_TOKENS = 1024;
+
 function getMaxOutputTokens(settings: UplinkSettings, request: CompanionRequest): number {
   // A cinema plan is a one-shot JSON document with many timed points. A low
   // chat reply cap can truncate it into unusable JSON while still costing a call.
@@ -73,6 +76,37 @@ function stableMemorySort(left: MemorySnippet, right: MemorySnippet): number {
   const leftKey = `${left.source || ""}::${left.id}::${left.title}`;
   const rightKey = `${right.source || ""}::${right.id}::${right.title}`;
   return leftKey.localeCompare(rightKey, "zh-CN");
+}
+
+function cleanMemoryInline(value: unknown): string {
+  return String(value ?? "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n+/g, " ")
+    .trim();
+}
+
+function cleanMemoryBody(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function renderStableMemory(memory: MemorySnippet): string {
+  const id = cleanMemoryInline(memory.id || memory.title || "unknown");
+  const title = cleanMemoryInline(memory.title || "Untitled memory");
+  const text = cleanMemoryBody(memory.text);
+  const source = cleanMemoryInline(memory.source);
+
+  return [
+    `[memory:${id}]`,
+    `标题：${title}`,
+    text ? `内容：${text}` : "内容：",
+    source ? `来源：${source}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function formatStableMemories(memories: MemorySnippet[], cacheScope?: string): string {
@@ -92,9 +126,181 @@ function formatStableMemories(memories: MemorySnippet[], cacheScope?: string): s
   }
 
   // Preserve overlapping recalled memories as a stable prompt prefix; append only new matches.
+  // Keep each memory block deterministic: no score, similarity, timing, hit reason, or dynamic numbering.
   return ordered
-    .map((memory) => `- ${memory.title}: ${memory.text}`)
+    .map(renderStableMemory)
+    .join("\n\n");
+}
+
+function stablePromptPrefixForCache(request: CompanionRequest): string {
+  const userContext = request.userContext ? `\nUser context:\n${request.userContext}` : "";
+
+  if (request.mode === "plan") {
+    return [
+      "You are generating a cinema companion plan for a co-watching room.",
+      "Use the persona core, user context, and relevant memories as continuity and tonal grounding.",
+      "The result must be useful for timed, short companion bubbles during playback.",
+      "",
+      "Persona core:",
+      request.personaCore,
+      userContext,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (request.mode === "chat") {
+    return [
+      "You are an AI companion whose continuity is guided by the user's persona core and memory notes.",
+      "",
+      "Persona core:",
+      request.personaCore,
+      userContext,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (request.mode === "watchPrompt") {
+    return [
+      "You are an AI companion whose continuity is guided by the user's persona core and memory notes.",
+      "Use the provided co-watching prompt as the current user request. Keep the answer natural, specific, and present in the movie moment.",
+      "Let the movie belong to itself first. If this moment truly touches the user, memories, or shared context, bring that in naturally; do not force every answer into personal history or relationship parallels.",
+      "Keep the breathing rhythm of the current scene: sometimes a short aside is enough, sometimes the user may want deeper analysis.",
+      "",
+      "Persona core:",
+      request.personaCore,
+      userContext,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return [
+    "You are a cinema companion, not a generic movie explainer.",
+    "Use the persona core as a continuity anchor, but let the current movie moment and current user request lead the answer.",
+    "Let the movie belong to itself first. If this moment truly touches the user, memories, or shared context, bring that in naturally; do not force every answer into personal history or relationship parallels.",
+    "Keep the breathing rhythm of the current scene: sometimes a short aside is enough, sometimes the user may want deeper analysis.",
+    "",
+    "Persona core:",
+    request.personaCore,
+    userContext,
+  ]
+    .filter(Boolean)
     .join("\n");
+}
+
+function splitPromptForClaudeCache(request: CompanionRequest, promptPreview: string): { stablePrefix: string; dynamicTail: string } | null {
+  const stablePrefix = stablePromptPrefixForCache(request).trim();
+  if (!stablePrefix || !promptPreview.startsWith(stablePrefix)) return null;
+  const dynamicTail = promptPreview.slice(stablePrefix.length).replace(/^\s+/, "");
+  if (!dynamicTail.trim()) return null;
+  return { stablePrefix, dynamicTail };
+}
+
+function estimateClaudeCacheTokens(text: string): number {
+  const source = String(text || "");
+  if (!source) return 0;
+  let weighted = 0;
+  for (const ch of source) {
+    weighted += ch.charCodeAt(0) > 127 ? 1 : 0.28;
+  }
+  return Math.max(0, Math.ceil(weighted));
+}
+
+function isClaudeOpusModel(model: string): boolean {
+  return /opus/i.test(String(model || ""));
+}
+
+function getClaudeCacheMinTokens(model: string): number {
+  const normalized = String(model || "").toLowerCase().replace(/[_./:]+/g, "-");
+  if (/claude-opus-4-5/.test(normalized) || /claude-opus-4-6/.test(normalized)) return 4096;
+  if (/claude-opus-4-7/.test(normalized)) return 2048;
+  if (/claude-opus-4-8/.test(normalized)) return 1024;
+  return CLAUDE_DEFAULT_MIN_CACHE_TOKENS;
+}
+
+function extractPromptSection(text: string, header: string, nextHeaders: string[]): string {
+  const body = String(text || "");
+  const start = body.indexOf(header);
+  if (start < 0) return "";
+  const afterHeader = start + header.length;
+  const ends = nextHeaders
+    .map((next) => body.indexOf(next, afterHeader))
+    .filter((index) => index > start);
+  const end = ends.length ? Math.min(...ends) : body.length;
+  return body.slice(start, end).trim();
+}
+
+function removePromptSection(text: string, section: string): string {
+  if (!section) return text;
+  return String(text || "")
+    .replace(section, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildClaudePromptCachePlan(
+  request: CompanionRequest,
+  promptPreview: string,
+  model: string,
+): {
+  stablePrefix: string;
+  dynamicTail: string;
+  cacheStrategy?: string;
+  cacheablePrefixTokens?: number;
+  cacheablePrefixMinTokens?: number;
+} | null {
+  const base = splitPromptForClaudeCache(request, promptPreview);
+  if (!base) return null;
+
+  let { stablePrefix, dynamicTail } = base;
+  const minTokens = getClaudeCacheMinTokens(model);
+  const stablePrefixTokens = estimateClaudeCacheTokens(stablePrefix);
+  const shouldTryStableExpansion = minTokens > CLAUDE_DEFAULT_MIN_CACHE_TOKENS && stablePrefixTokens < minTokens;
+  let cacheStrategy = shouldTryStableExpansion
+    ? "claude-high-threshold-stable-prefix"
+    : "claude-stable-prefix";
+
+  if (shouldTryStableExpansion) {
+    // Relevant memories are rendered before recent conversation/current input,
+    // and should stay free of scores, timings, and dynamic hit explanations.
+    const relevantMemories = extractPromptSection(dynamicTail, "Relevant memories:", [
+      "\nRecent conversation:",
+      "\nCurrent attachments:",
+      "\nPlan request:",
+      "\nMovie:",
+      "\nSubtitle window:",
+      "\nUser says:",
+      "\nReturn only",
+      "\nAnswer ",
+    ]);
+    if (relevantMemories) {
+      stablePrefix = `${stablePrefix}\n\n${relevantMemories}`;
+      dynamicTail = removePromptSection(dynamicTail, relevantMemories);
+      cacheStrategy = estimateClaudeCacheTokens(stablePrefix) >= minTokens
+        ? "claude-high-threshold-expanded-prefix"
+        : "claude-high-threshold-expanded-prefix-below-minimum";
+    }
+  }
+
+  return {
+    stablePrefix,
+    dynamicTail,
+    cacheStrategy,
+    cacheablePrefixTokens: estimateClaudeCacheTokens(stablePrefix),
+    cacheablePrefixMinTokens: minTokens,
+  };
+}
+
+function isClaudeLikeProfile(provider: ModelProvider, profile: ProviderProfile): boolean {
+  const model = String(profile.model || "");
+  const baseUrl = String(profile.baseUrl || "");
+  return provider === "claude" || /(^|[/:_-])(anthropic|claude)([/:_.-]|$)/i.test(model) || isClaudeOpusModel(model) || /anthropic\.com/i.test(baseUrl);
+}
+
+function shouldRetryWithoutPromptCache(errorText: string): boolean {
+  return /cache_control|prompt caching|ephemeral|unsupported content type|content block|text block/i.test(errorText);
 }
 
 export function buildCompanionPrompt(request: CompanionRequest): string {
@@ -136,7 +342,7 @@ export function buildCompanionPrompt(request: CompanionRequest): string {
     const attachments = attachmentPromptBlock(request.attachments);
 
     return [
-      "You are an AI companion configured by the user's persona core and memory notes.",
+      "You are an AI companion whose continuity is guided by the user's persona core and memory notes.",
       "",
       "Persona core:",
       request.personaCore,
@@ -147,7 +353,7 @@ export function buildCompanionPrompt(request: CompanionRequest): string {
       "",
       `User says: ${request.userMessage}`,
       "",
-      "Answer in the user's language by default. Keep the current facts more important than old memories.",
+      "Answer in the user's language by default. Use memories as background; if old memories conflict with current facts, follow the current conversation.",
     ]
       .filter(Boolean)
       .join("\n");
@@ -161,7 +367,7 @@ export function buildCompanionPrompt(request: CompanionRequest): string {
       .join("\n");
 
     return [
-      "You are an AI companion configured by the user's persona core and memory notes.",
+      "You are an AI companion whose continuity is guided by the user's persona core and memory notes.",
       "Use the provided co-watching prompt as the current user request. Keep the answer natural, specific, and present in the movie moment.",
       "Let the movie belong to itself first. If this moment truly touches the user, memories, or shared context, bring that in naturally; do not force every answer into personal history or relationship parallels.",
       "Keep the breathing rhythm of the current scene: sometimes a short aside is enough, sometimes the user may want deeper analysis.",
@@ -195,7 +401,7 @@ export function buildCompanionPrompt(request: CompanionRequest): string {
 
   return [
     "You are a cinema companion, not a generic movie explainer.",
-    "Stay in character according to the persona core, but keep the answer grounded in the current movie moment.",
+    "Use the persona core as a continuity anchor, but let the current movie moment and current user request lead the answer.",
     "Let the movie belong to itself first. If this moment truly touches the user, memories, or shared context, bring that in naturally; do not force every answer into personal history or relationship parallels.",
     "Keep the breathing rhythm of the current scene: sometimes a short aside is enough, sometimes the user may want deeper analysis.",
     "",
@@ -212,7 +418,7 @@ export function buildCompanionPrompt(request: CompanionRequest): string {
     "",
     `User says: ${request.userMessage}`,
     "",
-    "Answer naturally as a co-watching companion. Avoid template-like film criticism unless the user asks for analysis.",
+    "Answer naturally as a co-watching companion. Use the persona core as background, not a script. Avoid template-like film criticism unless the user asks for analysis.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -232,7 +438,6 @@ export function createDemoPersonaAdapter(): PersonaAdapter {
     },
   };
 }
-
 export function createLocalMemoryAdapter(getNotes: () => string): MemoryAdapter {
   return {
     async retrieveRelevant(query: string, limit = 4): Promise<MemorySnippet[]> {
@@ -254,11 +459,11 @@ export function createLocalMemoryAdapter(getNotes: () => string): MemoryAdapter 
   };
 }
 
-export function createMemoryBankAdapter(isEnabled: () => boolean): MemoryAdapter {
+export function createMemoryBankAdapter(isEnabled: () => boolean, getSettings?: () => UplinkSettings): MemoryAdapter {
   return {
     async retrieveRelevant(query: string, limit = 4): Promise<MemorySnippet[]> {
       if (!isEnabled()) return [];
-      return retrieveMemorySnippets(query, limit);
+      return retrieveMemorySnippets(query, limit, getSettings?.());
     },
   };
 }
@@ -269,10 +474,10 @@ export function createDemoLLMAdapter(): LLMAdapter {
       const promptPreview = buildCompanionPrompt(request);
       const active = request.watch.activeSubtitle?.text;
       const base = active
-        ? `我会围绕这一句来陪你看：${active}`
-        : "我会先贴着当前时间点陪你，不急着把整部片讲成影评。";
+        ? `I can stay with this subtitle: ${active}`
+        : "I will stay close to the current moment instead of turning the whole movie into a review.";
       return {
-        text: `${base}\n\n这是 demo adapter 的回答。接入你自己的模型配置后，这里会变成真实模型输出。`,
+        text: `${base}\n\nThis is the demo adapter response. After you connect a real model, this will become live model output.`,
         promptPreview,
         modelUsed: "demo-adapter",
         tokenCount: estimateTokens(base),
@@ -295,7 +500,7 @@ function resolvePromptCacheProvider(provider: ModelProvider, profile: ProviderPr
     return "deepseek" as const;
   }
   if (provider === "gemini") return "gemini" as const;
-  if (provider === "claude") return "claude" as const;
+  if (provider === "claude" || model.includes("claude") || model.includes("anthropic") || model.includes("opus")) return "claude" as const;
   return providerToPromptCacheProvider(provider);
 }
 
@@ -336,6 +541,10 @@ async function requestJson(url: string, init: RequestInit): Promise<any> {
 
 function shouldRetryWithoutStreamUsage(errorText: string): boolean {
   return /stream_options|include_usage|unknown parameter|unsupported|unrecognized|extra field|invalid field/i.test(errorText);
+}
+
+function shouldRetryWithoutImages(errorText: string): boolean {
+  return /unsupported content type|image_url|vision|multimodal|image input|content type/i.test(errorText);
 }
 
 function pickBetterUsage(current: any, next: any): any {
@@ -413,66 +622,126 @@ async function completeWithOpenAICompatible(
   const maxOutputTokens = getMaxOutputTokens(settings, request);
   const endpoint = `${trimTrailingSlash(profile.baseUrl)}/chat/completions`;
   const cacheProvider = resolvePromptCacheProvider(provider, profile);
+  const promptCacheParts = buildClaudePromptCachePlan(request, promptPreview, profile.model);
+  let useClaudePromptCache = provider === "openrouter" && isClaudeLikeProfile(provider, profile) && !!promptCacheParts;
+  const promptCacheMeta = useClaudePromptCache && promptCacheParts
+    ? {
+        cacheStrategy: promptCacheParts.cacheStrategy,
+        cacheablePrefixTokens: promptCacheParts.cacheablePrefixTokens,
+        cacheablePrefixMinTokens: promptCacheParts.cacheablePrefixMinTokens,
+      }
+    : undefined;
   // Plan generation needs one complete JSON document. It gains nothing from
   // streaming partial tokens, and several compatible providers can split or
   // interleave structured output in ways that leave an incomplete JSON payload.
   const shouldStream = request.mode !== "plan" && settings.stream;
-  const content: any[] = [{ type: "text", text: promptPreview }];
+  const imageParts: any[] = [];
 
   if (settings.contextLoad.attachScreenshot && request.watch.screenshotDataUrl) {
-    content.push({
+    imageParts.push({
       type: "image_url",
       image_url: { url: request.watch.screenshotDataUrl },
     });
   }
 
   for (const attachment of imagesForModel(request, 4)) {
-    content.push({
+    imageParts.push({
       type: "image_url",
       image_url: { url: attachment.dataUrl },
     });
   }
 
-  const body: Record<string, unknown> = {
-    model: profile.model,
-    messages: [{ role: "user", content }],
-    temperature,
-    max_tokens: maxOutputTokens,
-    stream: shouldStream,
+  const hasImageInput = imageParts.length > 0;
+  let includeImages = true;
+
+  const buildContent = (): any => {
+    const textParts: any[] = useClaudePromptCache && promptCacheParts
+      ? [
+          {
+            type: "text",
+            text: promptCacheParts.stablePrefix,
+            cache_control: CLAUDE_CACHE_CONTROL,
+          },
+          { type: "text", text: promptCacheParts.dynamicTail },
+        ]
+      : [{ type: "text", text: promptPreview }];
+    const parts = includeImages ? [...textParts, ...imageParts] : textParts;
+    return parts.length > 1 ? parts : promptPreview;
   };
 
-  if (shouldStream) {
-    body.stream_options = { include_usage: true };
-  }
+  const buildBody = (): Record<string, unknown> => {
+    const body: Record<string, unknown> = {
+      model: profile.model,
+      messages: [{ role: "user", content: buildContent() }],
+      temperature,
+      max_tokens: maxOutputTokens,
+      stream: shouldStream,
+    };
 
-  // A visible thinking trace is useful in conversation, not in a strict JSON
-  // planning call; for plans it can consume output budget or pollute the body.
-  if (provider === "glm" && request.mode !== "plan") {
-    body.thinking = { type: "enabled" };
-  }
+    if (shouldStream) {
+      body.stream_options = { include_usage: true };
+    }
+
+    // A visible thinking trace is useful in conversation, not in a strict JSON
+    // planning call; for plans it can consume output budget or pollute the body.
+    if (provider === "glm" && request.mode !== "plan") {
+      body.thinking = { type: "enabled" };
+    }
+
+    return body;
+  };
 
   const headers = {
     Authorization: `Bearer ${profile.apiKey}`,
     "Content-Type": "application/json",
   };
 
-  let requestBody = body;
+  let requestBody = buildBody();
   let response = await fetch(endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify(requestBody),
+    signal: request.signal,
   });
 
   if (!response.ok) {
     let text = await response.text();
+    if (useClaudePromptCache && shouldRetryWithoutPromptCache(text)) {
+      useClaudePromptCache = false;
+      requestBody = buildBody();
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: request.signal,
+      });
+      text = response.ok ? "" : await response.text();
+    }
     if (shouldStream && requestBody.stream_options && shouldRetryWithoutStreamUsage(text)) {
-      const retryBody = { ...body };
+      const retryBody = { ...buildBody() };
       delete retryBody.stream_options;
       requestBody = retryBody;
       response = await fetch(endpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody),
+        signal: request.signal,
+      });
+      text = response.ok ? "" : await response.text();
+    }
+    if (!response.ok && hasImageInput && shouldRetryWithoutImages(text)) {
+      includeImages = false;
+      const fallbackBody = buildBody();
+      fallbackBody.messages = [{
+        role: "user",
+        content: `${promptPreview}\n\n[Vision fallback]\nThe configured model or endpoint rejected image inputs. Continue with the text, image names, and attachment notes only. If the user asks you to inspect the image itself, say naturally that this model cannot read the image and suggest switching to a vision-capable model.`,
+      }];
+      requestBody = fallbackBody;
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: request.signal,
       });
       text = response.ok ? "" : await response.text();
     }
@@ -492,7 +761,7 @@ async function completeWithOpenAICompatible(
     const streamed = await readOpenAICompatibleStream(response, request.onStreamUpdate);
     const parsedUsage = parseUsageForPromptCache(streamed.usage);
     if (streamed.usage) {
-      recordPromptCacheTurn(cacheProvider, streamed.model || profile.model, streamed.usage);
+      recordPromptCacheTurn(cacheProvider, streamed.model || profile.model, streamed.usage, promptCacheMeta);
     }
     return {
       text: streamed.text || "模型返回为空。",
@@ -516,6 +785,7 @@ async function completeWithOpenAICompatible(
       cacheProvider,
       typeof payload?.model === "string" ? payload.model : profile.model,
       payload.usage,
+      promptCacheMeta,
     );
   }
 
@@ -535,7 +805,16 @@ async function completeWithClaude(
   const promptPreview = buildCompanionPrompt(request);
   const temperature = settings.temperature;
   const maxOutputTokens = getMaxOutputTokens(settings, request);
-  const content: any[] = [{ type: "text", text: promptPreview }];
+  const promptCacheParts = buildClaudePromptCachePlan(request, promptPreview, profile.model);
+  let useClaudePromptCache = !!promptCacheParts;
+  const promptCacheMeta = useClaudePromptCache && promptCacheParts
+    ? {
+        cacheStrategy: promptCacheParts.cacheStrategy,
+        cacheablePrefixTokens: promptCacheParts.cacheablePrefixTokens,
+        cacheablePrefixMinTokens: promptCacheParts.cacheablePrefixMinTokens,
+      }
+    : undefined;
+  const content: any[] = [{ type: "text", text: promptCacheParts?.dynamicTail || promptPreview }];
   const image = settings.contextLoad.attachScreenshot ? getDataUrlParts(request.watch.screenshotDataUrl) : null;
   const attachedImages = imagesForModel(request, 4)
     .map((attachment) => getDataUrlParts(attachment.dataUrl))
@@ -563,24 +842,62 @@ async function completeWithClaude(
     });
   }
 
-  const payload = await requestJson(`${trimTrailingSlash(profile.baseUrl)}/messages`, {
-    method: "POST",
-    headers: {
-      "x-api-key": profile.apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const headers = {
+    "x-api-key": profile.apiKey,
+    "anthropic-version": "2023-06-01",
+    "Content-Type": "application/json",
+  };
+  const endpoint = `${trimTrailingSlash(profile.baseUrl)}/messages`;
+  const buildBody = () => ({
       model: profile.model,
       max_tokens: maxOutputTokens,
       temperature,
+      ...(useClaudePromptCache && promptCacheParts
+        ? {
+            system: [{
+              type: "text",
+              text: promptCacheParts.stablePrefix,
+              cache_control: CLAUDE_CACHE_CONTROL,
+            }],
+          }
+        : {}),
       messages: [{ role: "user", content }],
-    }),
   });
+
+  let rawResponse = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(buildBody()),
+    signal: request.signal,
+  });
+  let rawText = await rawResponse.text();
+
+  if (!rawResponse.ok && useClaudePromptCache && shouldRetryWithoutPromptCache(rawText)) {
+    useClaudePromptCache = false;
+    content[0] = { type: "text", text: promptPreview };
+    rawResponse = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(buildBody()),
+      signal: request.signal,
+    });
+    rawText = await rawResponse.text();
+  }
+
+  let payload: any = {};
+  try {
+    payload = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    payload = { text: rawText };
+  }
+  if (!rawResponse.ok) {
+    const message = payload?.error?.message || payload?.message || rawText || rawResponse.statusText;
+    throw new Error(`API Error ${rawResponse.status}: ${message}`);
+  }
 
   const parsedUsage = parseUsageForPromptCache(payload?.usage);
   if (payload?.usage) {
-    recordPromptCacheTurn("claude", typeof payload?.model === "string" ? payload.model : profile.model, payload.usage);
+    recordPromptCacheTurn("claude", typeof payload?.model === "string" ? payload.model : profile.model, payload.usage, promptCacheMeta);
   }
 
   return {
@@ -636,6 +953,7 @@ async function completeWithGemini(
         maxOutputTokens,
       },
     }),
+    signal: request.signal,
   });
 
   const text = payload?.candidates?.[0]?.content?.parts
@@ -660,21 +978,27 @@ export function createConfiguredLLMAdapter(getSettings: () => UplinkSettings): L
   return {
     async complete(request: CompanionRequest): Promise<CompanionResponse> {
       const settings = getSettings();
-      const profile = getActiveProfile(settings);
+      const channel = request.channel === "journal" ? "journal" : "chat";
+      const resolved = channel === "journal"
+        ? getJournalProfile(settings)
+        : { provider: settings.activeProvider, profile: getActiveProfile(settings) };
+      const { provider, profile } = resolved;
 
       if (!profile.apiKey.trim()) {
-        throw new Error("请先在右上角设置里填写当前通道的 API Key。");
+        throw new Error(channel === "journal"
+          ? "请先在设置里填写日记/总结通道的 API Key。"
+          : "请先在右上角设置里填写当前通道的 API Key。");
       }
 
-      if (settings.activeProvider === "claude") {
+      if (provider === "claude") {
         return completeWithClaude(profile, settings, request);
       }
 
-      if (settings.activeProvider === "gemini") {
+      if (provider === "gemini") {
         return completeWithGemini(profile, settings, request);
       }
 
-      return completeWithOpenAICompatible(settings.activeProvider, profile, settings, request);
+      return completeWithOpenAICompatible(provider, profile, settings, request);
     },
   };
 }

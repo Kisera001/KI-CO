@@ -55,9 +55,13 @@ export interface MemorySnippet {
 }
 
 export type ModelProvider = "openrouter" | "claude" | "gemini" | "glm" | "deepseek";
-export type ThemePreset = "black-gold" | "white-gold" | "pink-mocha";
+export type JournalProvider = "active" | ModelProvider;
+export type ThemePreset = "black-gold" | "white-gold" | "pink-mocha" | "custom";
 export type FontStylePreset = "system" | "soft";
 export type FontSizePreset = "small" | "standard" | "large";
+export type MemoryRetrievalMode = "local" | "vector" | "hybrid";
+export type VectorProvider = "none" | "local" | "openai" | "gemini";
+export type ObsidianScopeMode = "all" | "persona" | "book" | "custom";
 
 export interface ModelPreset {
   id: string;
@@ -68,6 +72,7 @@ export interface ProviderProfile {
   apiKey: string;
   baseUrl: string;
   model: string;
+  journalModel: string;
 }
 
 export interface ContextLoadSettings {
@@ -79,9 +84,43 @@ export interface ContextLoadSettings {
   attachScreenshot: boolean;
 }
 
+export interface MemoryRetrievalSettings {
+  memoryRetrievalMode: MemoryRetrievalMode;
+  enableObsidianRetrieval: boolean;
+  vectorOnDemandEnabled: boolean;
+  vectorOnDemandMinItems: number;
+  vectorOnDemandMinChars: number;
+  vectorOnDemandPromoteMode: Exclude<MemoryRetrievalMode, "local">;
+  vectorProvider: VectorProvider;
+  vectorEmbeddingModel: string;
+  vectorOpenAIBaseUrl: string;
+  vectorOpenAIApiKey: string;
+  vectorUseOpenRouterProfile: boolean;
+  vectorTopK: number;
+  vectorScoreThreshold: number;
+  vectorRerank: boolean;
+  vectorCrossEncoderRerank: boolean;
+  vectorLiteralExactTitleBoost: number;
+  vectorLiteralExactAliasBoost: number;
+  vectorLiteralExactBodyBoost: number;
+  vectorLiteralTermTitleBoost: number;
+  vectorLiteralTermBodyBoost: number;
+  vectorLiteralBoostCap: number;
+  vectorBuildBatchSize: number;
+  vectorBuildYieldMs: number;
+  rawMemoryDeepDiveEnabled: boolean;
+  rawMemoryWindowLimit: number;
+  vectorContextBudgetChars: number;
+  latestStyleEnabled: boolean;
+  latestStyleTopK: number;
+  latestStylePathKeyword: string;
+  obsidianScopeMode: ObsidianScopeMode;
+  obsidianScopeCustom: string;
+}
+
 export interface VisualAtmosphereSettings {
   theme: ThemePreset;
-  backgroundFit: "cover" | "contain";
+  backgroundFit: "cover" | "stage" | "contain";
   customBackgroundDataUrl: string;
   fontStyle: FontStylePreset;
   fontSize: FontSizePreset;
@@ -97,10 +136,12 @@ export interface VisualAtmosphereSettings {
 
 export interface UplinkSettings {
   activeProvider: ModelProvider;
+  journalProvider: JournalProvider;
   temperature: number;
   stream: boolean;
   profiles: Record<ModelProvider, ProviderProfile>;
   contextLoad: ContextLoadSettings;
+  memoryRetrieval: MemoryRetrievalSettings;
   visual: VisualAtmosphereSettings;
 }
 
@@ -121,6 +162,7 @@ export interface MemoryAdapter {
 
 export interface CompanionRequest {
   mode?: "cinema" | "chat" | "plan" | "watchPrompt";
+  channel?: "chat" | "journal";
   cacheScope?: string;
   userMessage: string;
   attachments?: ConversationAttachment[];
@@ -130,6 +172,7 @@ export interface CompanionRequest {
   memories: MemorySnippet[];
   recentMessages?: ConversationTurn[];
   onStreamUpdate?: (text: string) => void;
+  signal?: AbortSignal;
 }
 
 export interface CompanionResponse {
