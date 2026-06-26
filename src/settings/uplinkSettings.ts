@@ -189,6 +189,7 @@ export const DEFAULT_UPLINK_SETTINGS: UplinkSettings = {
     maxOutputTokens: 1200,
     shortTermMessageLimit: 15,
     memorySnippetLimit: 4,
+    timeAwarenessMode: "date_only",
     subtitleBefore: 10,
     subtitleAfter: 2,
     attachScreenshot: true,
@@ -228,6 +229,10 @@ function normalizeBackgroundFit(value: unknown): VisualAtmosphereSettings["backg
   if (value === "cover") return shouldMigrateLegacyCoverBackground() ? "stage" : "cover";
   if (value === "stage" || value === "contain") return value;
   return "stage";
+}
+
+function normalizeTimeAwarenessMode(value: unknown): UplinkSettings["contextLoad"]["timeAwarenessMode"] {
+  return value === "off" || value === "realtime" ? value : "date_only";
 }
 
 function shouldMigrateLegacyCoverBackground(): boolean {
@@ -370,6 +375,7 @@ export function normalizeUplinkSettings(raw: Partial<UplinkSettings> | null | un
     contextLoad: {
       ...DEFAULT_UPLINK_SETTINGS.contextLoad,
       ...(raw?.contextLoad || {}),
+      timeAwarenessMode: normalizeTimeAwarenessMode(raw?.contextLoad?.timeAwarenessMode),
       subtitleBefore: DEFAULT_UPLINK_SETTINGS.contextLoad.subtitleBefore,
       subtitleAfter: DEFAULT_UPLINK_SETTINGS.contextLoad.subtitleAfter,
       attachScreenshot: DEFAULT_UPLINK_SETTINGS.contextLoad.attachScreenshot,

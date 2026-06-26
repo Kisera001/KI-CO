@@ -42,6 +42,7 @@ import {
 } from "../../storage/conversations";
 import { selectCacheFriendlyWindow } from "../../utils/contextWindow";
 import { shouldRetrieveMemory } from "../../utils/memoryRecallGate";
+import { buildTimeAwarenessContext } from "../../utils/timeAwareness";
 import { MarkdownText } from "../MarkdownText";
 import { getChronicleWriteIntent, getContinuityContext, maybeWriteChronicleAfterTurn } from "../../services/chronicleService";
 import { getChroniclePreferences } from "../../storage/chronicles";
@@ -1085,6 +1086,7 @@ ${currentStateCard.content.trim()}`
       ? `这是上一窗口刚刚聊到的位置，只在这次接续时参考：\n${handoff.content}`
       : "";
     const assembledUserContext = [userContext, continuityContext, stateCardContext, handoffContext].filter(Boolean).join("\n\n");
+    const dynamicContext = buildTimeAwarenessContext(uplinkSettings);
 
     const recentMessages = selectCacheFriendlyWindow(baseMessages, uplinkSettings.contextLoad.shortTermMessageLimit)
       .map((message) => ({
@@ -1100,6 +1102,7 @@ ${currentStateCard.content.trim()}`
       attachments,
       personaCore,
       userContext: assembledUserContext,
+      dynamicContext,
       memories,
       recentMessages,
       onStreamUpdate,

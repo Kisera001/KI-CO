@@ -13153,6 +13153,134 @@ textarea::-webkit-scrollbar-thumb {
   color: var(--kx-readable-gold);
 }
 
+/* Chronos / time awareness: dynamic context only, kept visually light. */
+.chronos-settings-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--kx-border);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(var(--kx-primary-rgb), 0.10), transparent 34%),
+    color-mix(in srgb, var(--kx-panel-soft) 86%, transparent);
+  padding: 12px 14px;
+}
+
+.chronos-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.chronos-copy strong {
+  color: var(--kx-text-main);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+}
+
+.chronos-copy small,
+.chronos-settings-card p {
+  margin: 0;
+  color: var(--kx-muted);
+  font-size: 0.64rem;
+  line-height: 1.58;
+}
+
+.chronos-mode-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.chronos-mode-row button {
+  display: inline-flex;
+  min-height: 31px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--kx-border);
+  border-radius: 999px;
+  color: var(--kx-muted);
+  background: color-mix(in srgb, var(--kx-input-bg) 82%, transparent);
+  font-size: 0.68rem;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.chronos-mode-row button:hover,
+.chronos-mode-row button.active {
+  border-color: color-mix(in srgb, var(--kx-primary) 48%, var(--kx-border));
+  color: var(--kx-text-main);
+  background: color-mix(in srgb, var(--kx-primary) 13%, var(--kx-panel-soft));
+}
+
+.chronos-mode-row button:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 560px) {
+  .chronos-mode-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Contrast pass for pale themes: preserve softness without losing text. */
+.settings-route-shell[data-theme="custom"],
+.chronicle-route-shell[data-theme="custom"],
+.cinema-shell[data-theme="custom"],
+.cottage-chat-shell[data-theme="custom"] {
+  --kx-readable-gold: #765643;
+  --interactive-accent: #85614f;
+  --kx-primary: #85614f;
+  --kx-primary-rgb: 133, 97, 79;
+}
+
+.cottage-chat-shell[data-theme="white-gold"] .cottage-sidebar-toggle,
+.cottage-chat-shell[data-theme="custom"] .cottage-sidebar-toggle {
+  border-color: color-mix(in srgb, var(--kx-primary) 28%, var(--kx-border));
+  color: color-mix(in srgb, var(--kx-text-main) 82%, var(--kx-primary));
+  background: color-mix(in srgb, var(--kx-panel-soft) 72%, transparent);
+}
+
+.cottage-chat-shell[data-theme="white-gold"] .cottage-sidebar-toggle:hover,
+.cottage-chat-shell[data-theme="custom"] .cottage-sidebar-toggle:hover,
+.cottage-chat-shell[data-theme="white-gold"].has-sidebar .cottage-sidebar-toggle,
+.cottage-chat-shell[data-theme="custom"].has-sidebar .cottage-sidebar-toggle {
+  border-color: color-mix(in srgb, var(--kx-primary) 42%, var(--kx-border));
+  color: var(--kx-text-main);
+  background: color-mix(in srgb, var(--kx-primary) 11%, var(--kx-panel-soft));
+}
+
+.cottage-chat-shell[data-theme="white-gold"] .cottage-empty-chat,
+.cottage-chat-shell[data-theme="custom"] .cottage-empty-chat {
+  color: var(--kx-muted);
+}
+
+.cottage-chat-shell[data-theme="white-gold"] .cottage-empty-chat strong,
+.cottage-chat-shell[data-theme="custom"] .cottage-empty-chat strong {
+  color: var(--kx-text-main);
+}
+
+.cottage-chat-shell[data-theme="white-gold"] .cottage-empty-chat span {
+  color: rgba(70, 55, 41, 0.66);
+}
+
+.cottage-chat-shell[data-theme="custom"] .cottage-empty-chat span {
+  color: rgba(79, 67, 101, 0.66);
+}
+
+.settings-route-shell[data-theme="white-gold"] .persona-memory-gate strong,
+.settings-route-shell[data-theme="custom"] .persona-memory-gate strong {
+  color: var(--kx-text-main);
+}
+
+.settings-route-shell[data-theme="white-gold"] .persona-memory-gate small {
+  color: rgba(70, 55, 41, 0.62);
+  opacity: 1;
+}
+
+.settings-route-shell[data-theme="custom"] .persona-memory-gate small {
+  color: rgba(79, 67, 101, 0.62);
+  opacity: 1;
+}
+
 /* Settings density pass: smaller theme swatches and compact model presets. */
 .theme-orb-row {
   gap: 10px !important;

@@ -29,6 +29,7 @@ import { getSubtitleWindow, parseSubtitles } from "../utils/subtitles";
 import { selectCacheFriendlyWindow } from "../utils/contextWindow";
 import { shouldRetrieveMemory } from "../utils/memoryRecallGate";
 import { formatTime, slugifyTitle } from "../utils/time";
+import { buildTimeAwarenessContext } from "../utils/timeAwareness";
 import { listWatchRecords, removeWatchRecord, renameWatchRecord, saveWatchRecord } from "../storage/watchRecords";
 import { appendConversationMessages, findWatchConversation, getOrCreateWatchConversation, renameWatchConversationLink } from "../storage/conversations";
 import { MarkdownText } from "./MarkdownText";
@@ -1578,6 +1579,7 @@ export function CinemaCompanionRoom({
         userMessage: modelPrompt,
         personaCore,
         userContext,
+        dynamicContext: buildTimeAwarenessContext(uplinkSettings),
         memories,
         recentMessages,
         onStreamUpdate: (text) => {
@@ -1729,6 +1731,7 @@ export function CinemaCompanionRoom({
         userMessage: planPrompt,
         personaCore,
         userContext,
+        dynamicContext: buildTimeAwarenessContext(uplinkSettings),
         memories,
         watch: {
           title: title || "未命名影片",

@@ -161,6 +161,7 @@ export function UplinkSettingsPanel({ settings, onChange, personaProfile, onPers
   const [openSections, setOpenSections] = useState({
     visual: true,
     neural: true,
+    chronos: true,
     load: true,
     data: true,
   });
@@ -567,6 +568,40 @@ export function UplinkSettingsPanel({ settings, onChange, personaProfile, onPers
                 </div>
               </label>
             </div>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          icon={<Calendar size={18} />}
+          title="时空锚点 (Chronos)"
+          subtitle="日期、星期、节日和当前时段；只放进动态上下文。"
+          open={openSections.chronos}
+          onToggle={() => toggleSection("chronos")}
+        >
+          <div className="chronos-settings-card">
+            <div className="chronos-copy">
+              <strong>时间感知 (Time Awareness)</strong>
+              <small>影响模型是否知道“今天是什么日子 / 现在是不是深夜”。实时感知更有生活感，但不会放进稳定缓存前缀。</small>
+            </div>
+            <div className="chronos-mode-row">
+              {([
+                ["off", "关闭", "不注入日期或时间。"],
+                ["date_only", "日期感知", "日期 / 星期 / 节日 / 时段。"],
+                ["realtime", "实时感知", "在日期感知基础上加入当前时间。"],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={settings.contextLoad.timeAwarenessMode === value ? "active" : ""}
+                  onClick={() => updateContextLoad({ timeAwarenessMode: value })}
+                  title={hint}
+                >
+                  {settings.contextLoad.timeAwarenessMode === value ? <span aria-hidden="true">✦</span> : null}
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p>建议日常默认使用“日期感知”。只有希望 TA 知道具体几点、比如凌晨陪聊或熬夜工作时，再开“实时感知”。</p>
           </div>
         </SettingsSection>
 

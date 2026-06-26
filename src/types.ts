@@ -62,6 +62,7 @@ export type FontSizePreset = "small" | "standard" | "large";
 export type MemoryRetrievalMode = "local" | "vector" | "hybrid";
 export type VectorProvider = "none" | "local" | "openai" | "gemini";
 export type ObsidianScopeMode = "all" | "persona" | "book" | "custom";
+export type TimeAwarenessMode = "off" | "date_only" | "realtime";
 
 export interface ModelPreset {
   id: string;
@@ -79,6 +80,7 @@ export interface ContextLoadSettings {
   maxOutputTokens: number;
   shortTermMessageLimit: number;
   memorySnippetLimit: number;
+  timeAwarenessMode: TimeAwarenessMode;
   subtitleBefore: number;
   subtitleAfter: number;
   attachScreenshot: boolean;
@@ -169,6 +171,7 @@ export interface CompanionRequest {
   watch: WatchContext;
   personaCore: string;
   userContext?: string;
+  dynamicContext?: string;
   memories: MemorySnippet[];
   recentMessages?: ConversationTurn[];
   onStreamUpdate?: (text: string) => void;
