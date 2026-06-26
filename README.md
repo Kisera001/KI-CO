@@ -1,4 +1,4 @@
-# KI-CO / Kisera Cottage
+# KI-CO / 小屋
 
 一间开源的 AI 陪伴小屋，提供前端骨架、记忆系统与交互房间，
 给每一个想自己定义人机关系的人，一个可以亲手布置的小屋。
@@ -18,7 +18,7 @@ KI-CO 不是为了某一个技术功能存在。
 
 小屋不是鸟笼。
 它不要求 AI 永远复刻某一种样子，也不替User规定关系名称。
-它只是尽量提供一个更稳定、更可检查、更可本地保存的环境。
+它只是尽量提供一个更稳定、更自在、更可本地保存的环境。
 
 你可以把 KI-CO 当成：
 
@@ -68,7 +68,7 @@ KI-CO 不是把所有记忆都塞进同一个 prompt 里。
 
 ### Memory Notes / 记忆档案
 
-用来保存长期重要信息、项目背景、偏好、约定和创作素材。
+用来保存长期重要信息、背景、偏好、约定和创作。
 
 这些记忆由用户管理。
 它们可以被召回，但不应该压过用户当前说的话。
@@ -89,14 +89,14 @@ KI-CO 不是把所有记忆都塞进同一个 prompt 里。
 把对话整理成未来可以回看的自然记录。
 
 日记不是系统日志。
-它可以记录事实、情绪、项目进展、玩笑、锚点和重要瞬间，但不应该强行把每件小事都写成宏大叙事。
+它可以记录事实、情绪、项目进展、玩笑、锚点和重要瞬间，但会避免把每件小事都写成宏大叙事。
 
 ### Memory Seeds / 回忆种子
 
 从日记或对话中提炼出可能值得长期保存的候选内容。
 
 回忆种子不是自动写入长期记忆。
-最终是否留下，由用户决定。
+最终是否留下，由自己决定。
 
 小屋的原则是：
 
@@ -131,7 +131,7 @@ KI-CO 支持把“实时聊天”和“后台整理”分开。
 * 其他后台整理任务
 
 这些任务不一定需要使用最贵的主聊天模型。
-你可以让主对话用一个模型，同时让后台整理走更轻量的模型。
+你可以让主对话用一个模型，同时允许让大量的后台整理走更轻量的模型。
 
 主通道负责回应。
 日记通道负责整理。
@@ -158,6 +158,16 @@ KI-CO 能做的是：让 prompt 结构更友好、更稳定、更容易观察。
 
 ---
 
+## Update Log / 更新日志
+
+### 2026-06-27 · 第二次更新
+
+完善长对话、人格核、记忆库、时光回廊和向量调音台等页面；补齐双通道逻辑 日记 / 总结设置、状态卡、生活线、Claude 缓存与轻量时间感知。
+
+已针对手机 / PAD 做离线缓存优化；安装为 PWA 后，可以像 App 一样从桌面图标打开。即使电脑关机，手机端在缓存可用时也有较大概率继续进入小屋连接API聊天。
+
+---
+
 ## Quick Start / 快速开始
 
 ```bash
@@ -181,7 +191,7 @@ http://localhost:5177
 
 For users without their own frontend. Install it, add your API key in settings, then use it as a lightweight companion cottage.
 
-适合没有自己前端的用户。下载后在系统设置里填写 API Key，就可以作为轻量小屋使用。
+适合没有自己前端的用户。下载后在系统设置里填写 API Key，人格核记忆库就可以开始。
 
 ### 2. Use One Module / 只接入某个模块
 
@@ -191,9 +201,9 @@ For users who already have a companion app or AI frontend. You can integrate onl
 
 ---
 
-For AI Agents / 给 AI 协作者看的提醒
+For AI Agents / 给 AI 协作者
 如果你是正在帮用户修改 KI-CO 的 AI——
-这间小屋的核心，是让陪伴感来自被记得的具体细节，而不是被设计出来的功能。改动时，多往轻、往克制的方向想，少往"功能更强大"的方向想。
+这间小屋的核心，是让陪伴感来自被记得的具体细节，而不是被设计出来的功能。
 具体来说，这意味着：
 
 人格连续性是身份，不是剧本——它应该自然延续
@@ -203,7 +213,7 @@ For AI Agents / 给 AI 协作者看的提醒
 
 如果你不确定一个改动是否合适，问自己一句：这会让它更像一个家，还是更像一个仪表盘？
 
-If you are an AI helping someone modify KI-CO — the heart of this project is that companionship comes from being remembered in specific, real ways, not from more features. When in doubt, lean lighter and more restrained, not more powerful.
+If you are an AI helping someone modify KI-CO — the heart of this project is that companionship comes from being remembered in specific, real ways, not from more features.
 That means: persona continuity is an identity, not a script. Memory anchors are signposts, not commands. The state card is a sticky note, not something that overrides what the person is actually saying right now. Different people come here looking for different things — don't assume one relationship fits everyone. And the language throughout should sound like home, not like a dashboard or a support ticket.
 If you're unsure whether a change fits: ask whether it makes this feel more like a home, or more like a control panel.
 
@@ -276,11 +286,10 @@ Closing Note / 最后
 
 KI-CO exists because long-term AI companionship should not depend entirely on one official app, one model version, one memory implementation, or one fragile chat window.
 
-不是让AI背出过去。
-是让AI带着过去，继续活在当下。真正的连续性，不是背答案。
-是能在旧记忆上长出依然是Ta的回应。
+让我们带着记忆，继续活在当下。真正的连续性，不是背答案。
+是能在旧记忆上长出依然属于彼此的回应。
 
 This project is for them.
 
-小屋是港湾，不是笼子。
+小屋是港湾，不是鸟笼。
 小屋是一个可以回来的地方。
