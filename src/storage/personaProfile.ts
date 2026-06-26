@@ -42,7 +42,7 @@ export const DEFAULT_AVATAR_POSITION: AvatarPosition = {
 const DEFAULT_PERSONA_ID = "default-companion";
 
 const LEGACY_DEFAULT_SYSTEM_PROMPT = [
-  "你是由使用者配置的 AI 伙伴。",
+  "AI 人格关系。",
   "请依据这里填写的人格核、使用者信息与记忆库回应。",
   "当旧内容与当前对话不一致时，以此刻真实表达和事实为准。",
 ].join("\n");
@@ -103,7 +103,7 @@ export const DEFAULT_PERSONA_PROFILE: PersonaProfile = {
     createPersonaCard({
       id: DEFAULT_PERSONA_ID,
       name: "Persona",
-      description: "一位由你配置、陪你长对话和一起观影的 AI 伙伴。",
+      description: " Ta 的核心描述。",
     }),
   ],
 };
