@@ -1080,6 +1080,8 @@ export function ChatPage({
 
 状态卡可能包含上一阶段的玩笑、未完线索或情绪背景，请只在自然相关时轻轻带过，不要主动复述整张卡。
 
+状态卡只作为内部背景。正式回复中不要输出、改写或追加状态卡内容，也不要出现 [SESSION STATE CARD UPDATE] / 状态卡更新 / Now / Note / Known / Mood / Maybe / Anchor 这类内部标记。
+
 ${currentStateCard.content.trim()}`
       : "";
     const handoffContext = handoff?.content.trim()
